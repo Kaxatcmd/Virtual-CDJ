@@ -4,6 +4,9 @@
 build/
 cmake-build-*/
 
+# Packaged release staging (zips uploaded to GitHub Releases, not committed)
+/dist/
+
 # Visual Studio
 .vs/
 *.sln
