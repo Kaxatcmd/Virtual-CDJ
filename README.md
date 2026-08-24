@@ -154,6 +154,24 @@ or an OS "Open with" association):
 "build\src\VirtualCDJ_artefacts\Debug\Virtual CDJ.exe" "C:\path\to\track.wav"
 ```
 
+For everyday use (no CMake/compiler on PATH required), a `run.bat` is
+provided at the repository root — it automatically picks a Release build if
+one exists, otherwise falls back to Debug:
+
+```cmd
+run.bat
+```
+
+or from PowerShell:
+
+```powershell
+.\run.bat
+```
+
+A "Virtual CDJ" desktop shortcut pointing at `run.bat` (with the app's own
+icon) can also be created for one-click launching without any terminal at
+all.
+
 Use **Load Track...** (or drag-and-drop is not yet implemented) to load a
 file from the running application. See the on-screen keyboard hint strip, or
 `ARCHITECTURE.md` section 5, for the full keyboard mapping (Space = play/
