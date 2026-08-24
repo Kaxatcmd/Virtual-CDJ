@@ -918,3 +918,87 @@ The immediate priority is to establish a reliable foundation:
 Once this works reliably, implement keyboard control and pitch.
 
 Everything else builds on top of that foundation.
+
+---
+
+# 22. Technology Decision (Implemented)
+
+This section documents the concrete technology choice made for the first
+working implementation, per section 20 rule 9 ("update this architecture
+document when a major architectural decision changes").
+
+## 22.1 Framework: JUCE (C++20, vendored)
+
+**JUCE 8.0.15** was selected as the audio + GUI framework, vendored as source
+under `libs/JUCE` (plain copy, not a git submodule) so the project builds
+fully offline and reproducibly from a single `cmake` invocation. `examples/`,
+`docs/`, and `.github/` were pruned from the vendored copy since they are not
+referenced by our minimal `add_subdirectory(libs/JUCE)` usage.
+
+Reasons:
+
+- Mature, actively maintained, Windows-first real-time audio + GUI framework;
+  exactly the kind of "prefer mature libraries over hand-rolled DSP/decoding"
+  choice this document already asks for (section 20 rule 6, project brief).
+- `juce_audio_devices` gives a native low-latency **WASAPI** backend on
+  Windows out of the box (`juce::AudioDeviceManager` / `AudioSourcePlayer`),
+  satisfying the low-latency / deterministic real-time requirement without
+  writing a custom Windows audio backend.
+- `juce_audio_formats` gives WAV, AIFF, FLAC and Ogg Vorbis decoding
+  built in, plus **MP3 decoding via the OS-native Windows Media Foundation**
+  backend (`JUCE_USE_WINDOWS_MEDIA_FORMAT=1`, the JUCE default on Windows) —
+  this avoids JUCE's separate MP3 *software* decoder flag entirely, so no
+  extra licensing consideration is introduced for MP3 playback.
+- `juce::ResamplingAudioSource`, `juce::BufferingAudioSource`, and
+  `juce::PositionableAudioSource` give a directly reusable, battle-tested
+  foundation for pitch/rate control and background (non-blocking) file
+  reading, which the real-time-safety chapter (section 14) requires.
+- One dependency covers audio decode, audio device I/O, and GUI rendering,
+  which keeps the dependency surface small (section 18's "avoid adding a
+  dependency merely because it makes one small feature easier").
+
+## 22.2 Pitch implementation
+
+Implemented exactly as section 8 allows for a first safe version: pitch is a
+**resampling-ratio change**, not a pitch-preserving time-stretch. `base_pitch`
+and `pitch_bend` are tracked as separate atomic values in `PitchEngine`
+(`src/deck/PitchEngine.h`) and combined into one `effective_ratio` that is fed
+into `juce::ResamplingAudioSource::setResamplingRatio()`. This changes pitch
+and tempo together, like a turntable/CDJ without master tempo — a real,
+audible effect, not a UI-only fake. True pitch-preserving time-stretch (e.g.
+via a phase-vocoder or Rubber Band-style library) is a natural drop-in
+replacement behind the same `PitchEngine` interface later, without touching
+`DeckController` or the UI.
+
+## 22.3 BPM detection
+
+Implemented as a lightweight, best-effort **autocorrelation-of-onset-energy**
+estimator (`src/analysis/TrackAnalyzer.cpp`), run on a background
+`juce::Thread`, never on the audio thread, and never blocking file load or
+playback (section 8's explicit requirement). Results are folded into an
+80–175 BPM window to reduce octave (half/double-tempo) errors, but this is
+explicitly a heuristic, not a research-grade beat tracker — manual BPM
+correction is a natural next step and the architecture (a plain `double bpm`
++ `bool bpmValid` on the deck snapshot) already supports overwriting it later.
+
+## 22.4 Scratch / virtual platter
+
+Implemented the state model and UI (`ScratchEngine`, `PlatterView`) as
+required by sections 11–12, with a deliberately simple jog-based behavior:
+entering scratch mode pauses playback (remembering prior play state), and
+platter drag performs direct relative seeks (`jogBy`) through the timeline —
+i.e. movement through the audio timeline, not a pitch/rate hack. Full scratch
+DSP (needle-drop-accurate sub-block position control, momentum/inertia,
+audible direction-reversal handling at block boundaries) was **not**
+attempted in this pass, per section 12's explicit permission to "implement
+the interfaces and state model required for it and leave the advanced DSP
+isolated for a later phase" rather than fake a finished system.
+
+## 22.5 Testability
+
+`IAudioEngine` (`src/audio/IAudioEngine.h`) is an abstract interface;
+`DeckController` depends on it, not on the concrete JUCE `AudioEngine`. Unit
+tests (`tests/`) link against a pure in-memory `FakeAudioEngine` instead, so
+domain logic (pitch math, cue/loop/hot-cue state, seek clamping, command
+mapping, deck state transitions) is verified without a real audio device,
+per section 20's testing requirements.

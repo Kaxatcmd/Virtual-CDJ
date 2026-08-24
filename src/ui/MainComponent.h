@@ -27,8 +27,14 @@ namespace vcdj::ui
 
         void paint (juce::Graphics& g) override;
         void resized() override;
+        void visibilityChanged() override;
 
         bool keyPressed (const juce::KeyPress& key) override;
+
+        /** Loads a track directly, bypassing the file chooser dialog. Used for
+            the initial command-line file argument (and is handy for manual
+            testing / OS "open with" integration). */
+        void loadFile (const juce::File& file);
 
     private:
         void timerCallback() override;

@@ -19,7 +19,10 @@ namespace vcdj
             const juce::String identity = file.getFullPathName()
                                            + "|" + juce::String ((juce::int64) file.getSize())
                                            + "|" + juce::String (file.getLastModificationTime().toMilliseconds());
-            return juce::MD5 (identity.toUTF8()).toHexString();
+            // A cryptographic hash isn't required here - we only need a short,
+            // stable, filesystem-safe key derived from the file identity, so we
+            // avoid pulling in the juce_cryptography module for this alone.
+            return juce::String::toHexString (identity.hashCode64());
         }
     }
 
@@ -168,7 +171,7 @@ namespace vcdj
         onsetEnvelope.reserve ((size_t) (totalLength / onsetFrameSize) + 1);
 
         constexpr int chunkSize = 65536;
-        juce::AudioBuffer<float> chunk (juce::jmax (1, reader->numChannels), chunkSize);
+        juce::AudioBuffer<float> chunk (juce::jmax (1, (int) reader->numChannels), chunkSize);
 
         juce::int64 samplesReadTotal = 0;
         float curMin = 0.0f, curMax = 0.0f;

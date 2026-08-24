@@ -48,15 +48,25 @@ namespace vcdj::ui
 
         for (auto* button : { &playPauseButton, &cueButton, &returnCueButton, &stopButton,
                                &loopInButton, &loopOutButton, &loopToggleButton, &scratchButton })
+        {
+            // Keyboard shortcuts must keep working no matter what was last
+            // clicked with the mouse, so buttons must not steal keyboard focus
+            // away from this component (ARCHITECTURE.md section 4: keyboard
+            // control is first-class, not incidental).
+            button->setMouseClickGrabsKeyboardFocus (false);
             addAndMakeVisible (*button);
+        }
 
         for (int i = 0; i < HotCueStore::numSlots; ++i)
         {
             auto& button = hotCueButtons[(size_t) i];
             button.setButtonText (juce::String (i + 1));
             button.onClick = [this, i] { deckController.triggerHotCue (i); };
+            button.setMouseClickGrabsKeyboardFocus (false);
             addAndMakeVisible (button);
         }
+
+        loadButton.setMouseClickGrabsKeyboardFocus (false);
 
         keyboardHintLabel.setJustificationType (juce::Justification::topLeft);
         keyboardHintLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
@@ -151,6 +161,16 @@ namespace vcdj::ui
         return inputManager.handleKeyPress (key);
     }
 
+    void MainComponent::visibilityChanged()
+    {
+        // Keyboard shortcuts are the primary control surface for this app
+        // (ARCHITECTURE.md section 4), so make sure this component - not
+        // whichever child button JUCE would otherwise pick - owns keyboard
+        // focus as soon as the window becomes visible.
+        if (isVisible())
+            grabKeyboardFocus();
+    }
+
     void MainComponent::chooseAndLoadFile()
     {
         fileChooser = std::make_unique<juce::FileChooser> (
@@ -158,31 +178,39 @@ namespace vcdj::ui
             juce::File::getSpecialLocation (juce::File::userMusicDirectory),
             "*.wav;*.flac;*.mp3;*.aiff;*.aif;*.ogg");
 
-        const auto flags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
+        const auto chooserFlags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
 
-        fileChooser->launchAsync (flags, [this] (const juce::FileChooser& chooser)
+        fileChooser->launchAsync (chooserFlags, [this] (const juce::FileChooser& chooser)
         {
             const auto file = chooser.getResult();
 
             if (! file.existsAsFile())
                 return;
 
-            auto result = deckController.loadTrack (file);
-
-            if (! result.success)
-            {
-                juce::AlertWindow::showAsync (
-                    juce::MessageBoxOptions()
-                        .withIconType (juce::MessageBoxIconType::WarningIcon)
-                        .withTitle ("Could not load track")
-                        .withMessage (result.errorMessage)
-                        .withButton ("OK"),
-                    nullptr);
-            }
-
-            waveformFetched = false;
-            waveformView.setWaveform ({});
+            loadFile (file);
         });
+    }
+
+    void MainComponent::loadFile (const juce::File& file)
+    {
+        if (! file.existsAsFile())
+            return;
+
+        auto result = deckController.loadTrack (file);
+
+        if (! result.success)
+        {
+            juce::AlertWindow::showAsync (
+                juce::MessageBoxOptions()
+                    .withIconType (juce::MessageBoxIconType::WarningIcon)
+                    .withTitle ("Could not load track")
+                    .withMessage (result.errorMessage)
+                    .withButton ("OK"),
+                nullptr);
+        }
+
+        waveformFetched = false;
+        waveformView.setWaveform ({});
     }
 
     juce::String MainComponent::formatTime (double seconds)
@@ -220,9 +248,11 @@ namespace vcdj::ui
         trackNameLabel.setText (snapshot.trackLoaded ? deckController.getTrackName() : juce::String ("No track loaded"),
                                  juce::dontSendNotification);
 
-        bpmLabel.setText (snapshot.bpmAnalysisComplete
-                               ? (snapshot.bpm > 0.0 ? "BPM: " + juce::String (snapshot.bpm, 1) : "BPM: n/a")
-                               : "BPM: analyzing...",
+        bpmLabel.setText (! snapshot.trackLoaded
+                               ? "BPM: --"
+                               : (snapshot.bpmAnalysisComplete
+                                      ? (snapshot.bpm > 0.0 ? "BPM: " + juce::String (snapshot.bpm, 1) : "BPM: n/a")
+                                      : "BPM: analyzing..."),
                            juce::dontSendNotification);
 
         pitchLabel.setText (juce::String::formatted ("Pitch: %+.1f%%", snapshot.basePitchPercent + snapshot.bendPercent),

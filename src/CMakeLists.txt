@@ -44,7 +44,6 @@ target_compile_definitions(vcdj_core PUBLIC
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     JUCE_USE_WINDOWS_MEDIA_FORMAT=1
-    JUCE_DISPLAY_SPLASH_SCREEN=0
 )
 
 target_link_libraries(vcdj_core PUBLIC
@@ -62,7 +61,8 @@ target_link_libraries(vcdj_core PUBLIC
 
 juce_add_gui_app(VirtualCDJ
     PRODUCT_NAME "Virtual CDJ"
-    COMPANY_NAME "Virtual CDJ Project"
+    COMPANY_NAME "VirtualCDJProject"
+    BUNDLE_ID "com.virtualcdjproject.virtualcdj"
     NEEDS_WEB_BROWSER FALSE
     NEEDS_CURL FALSE)
 
