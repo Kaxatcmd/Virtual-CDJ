@@ -9,7 +9,7 @@ Behringer DDM4000 mixer.
 
 ## Hardware Setup
 
-Current setup:
+Current setup (personal example):
 
 - Behringer DDM4000 DJ mixer
 - Citronic MPCD-S3 CDJ
